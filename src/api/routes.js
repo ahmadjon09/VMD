@@ -33,7 +33,7 @@ function wrap(fn) {
         Promise.resolve(fn(req, res)).catch(next);
 }
 
-app.get('/ac', (_, res) => res.send('Hello!'))
+router.get('/ac', (_, res) => res.send('Hello!'))
 // ─── User ─────────────────────────────────────────────────────
 router.get('/user/:id', wrap(async (req, res) => {
     const user = await getUser(Number(req.params.id));
