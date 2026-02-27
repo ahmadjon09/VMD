@@ -1,0 +1,12 @@
+VMD-bot/
+├── index.js (bot)
+├── web-app/
+│   ├── index.html
+│   ├── app.js
+│   ├── style.css
+│   └── manifest.json
+├── models/
+│   └── User.js
+├── database/
+│   └── db.js
+└── package.json
