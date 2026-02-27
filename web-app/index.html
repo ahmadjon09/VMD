@@ -3,8 +3,9 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Music Bot - Web Player</title>
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>VMD - Music Player</title>
 
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -17,71 +18,31 @@
 
     <!-- Manifest -->
     <link rel="manifest" href="manifest.json">
+
+    <!-- Theme color -->
+    <meta name="theme-color" content="#8774E1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
 
 <body>
     <div class="app-container">
-        <!-- Sidebar -->
-        <div class="sidebar">
-            <div class="logo">
-                <i class="fas fa-music"></i>
-                <span>MusicBot</span>
-            </div>
-
-            <nav class="nav-menu">
-                <div class="nav-item active" data-page="home">
-                    <i class="fas fa-home"></i>
-                    <span data-i18n="home">Home</span>
-                </div>
-                <div class="nav-item" data-page="search">
-                    <i class="fas fa-search"></i>
-                    <span data-i18n="search">Search</span>
-                </div>
-                <div class="nav-item" data-page="favorites">
-                    <i class="fas fa-heart"></i>
-                    <span data-i18n="favorites">Favorites</span>
-                </div>
-                <div class="nav-item" data-page="playlists">
-                    <i class="fas fa-list"></i>
-                    <span data-i18n="playlists">Playlists</span>
-                </div>
-                <div class="nav-item" data-page="recent">
-                    <i class="fas fa-history"></i>
-                    <span data-i18n="recent">Recent</span>
-                </div>
-                <div class="nav-item" data-page="settings">
-                    <i class="fas fa-cog"></i>
-                    <span data-i18n="settings">Settings</span>
-                </div>
-            </nav>
-
-            <div class="user-info">
-                <div class="user-avatar">
-                    <img src="https://ui-avatars.com/api/?name=User&background=8774E1&color=fff" alt="">
-                </div>
-                <div class="user-details">
-                    <div class="user-name" id="userName">Loading...</div>
-                    <div class="user-status" id="userStatus">online</div>
-                </div>
+        <!-- Header -->
+        <div class="header">
+            <div class="page-title" id="pageTitle">Home</div>
+            <div class="header-actions">
+                <button class="lang-btn" onclick="toggleLanguage()">
+                    <i class="fas fa-language"></i>
+                    <span id="currentLang">UZ</span>
+                </button>
+                <button class="theme-btn" onclick="toggleTheme()">
+                    <i class="fas fa-moon"></i>
+                </button>
             </div>
         </div>
 
         <!-- Main Content -->
         <div class="main-content">
-            <!-- Header -->
-            <div class="header">
-                <div class="page-title" id="pageTitle">Home</div>
-                <div class="header-actions">
-                    <button class="lang-btn" onclick="toggleLanguage()">
-                        <i class="fas fa-language"></i>
-                        <span id="currentLang">UZ</span>
-                    </button>
-                    <button class="theme-btn" onclick="toggleTheme()">
-                        <i class="fas fa-moon"></i>
-                    </button>
-                </div>
-            </div>
-
             <!-- Pages -->
             <div class="pages">
                 <!-- Home Page -->
@@ -92,23 +53,23 @@
                     </div>
 
                     <div class="quick-actions">
-                        <button class="quick-action" onclick="window.location='#search'">
+                        <button class="quick-action" onclick="navigateTo('search')">
                             <i class="fas fa-search"></i>
                             <span data-i18n="searchMusic">Search Music</span>
                         </button>
-                        <button class="quick-action" onclick="loadTopHits()">
+                        <button class="quick-action" onclick="loadTopHits(); navigateTo('search')">
                             <i class="fas fa-chart-line"></i>
                             <span data-i18n="topHits">Top Hits</span>
                         </button>
                     </div>
 
                     <div class="section">
-                        <h2 data-i18n="recentlyPlayed">Recently Played</h2>
+                        <h2><i class="fas fa-history"></i> <span data-i18n="recentlyPlayed">Recently Played</span></h2>
                         <div class="track-grid" id="recentlyPlayedGrid"></div>
                     </div>
 
                     <div class="section">
-                        <h2 data-i18n="favorites">Your Favorites</h2>
+                        <h2><i class="fas fa-heart"></i> <span data-i18n="favorites">Your Favorites</span></h2>
                         <div class="track-grid" id="favoritesGrid"></div>
                     </div>
                 </div>
@@ -123,18 +84,18 @@
 
                     <div class="search-filters">
                         <button class="filter-btn active" onclick="filterSearch('all')">
-                            <span data-i18n="all">All</span>
+                            <span>All</span>
                         </button>
                         <button class="filter-btn" onclick="filterSearch('top')">
                             <span data-i18n="topHits">Top Hits</span>
                         </button>
                         <button class="filter-btn" onclick="filterSearch('new')">
-                            <span data-i18n="new">New</span>
+                            <span>New</span>
                         </button>
                     </div>
 
                     <div class="search-results" id="searchResults">
-                        <div class="loading-spinner" style="display: none;">
+                        <div class="loading-spinner">
                             <i class="fas fa-spinner fa-spin"></i>
                         </div>
                     </div>
@@ -155,7 +116,7 @@
                         <h2 data-i18n="yourPlaylists">Your Playlists</h2>
                         <button class="create-playlist-btn" onclick="createPlaylist()">
                             <i class="fas fa-plus"></i>
-                            <span data-i18n="newPlaylist">New Playlist</span>
+                            <span data-i18n="newPlaylist">New</span>
                         </button>
                     </div>
                     <div class="playlists-grid" id="playlistsGrid"></div>
@@ -163,7 +124,7 @@
 
                 <!-- Recent Page -->
                 <div class="page" id="recentPage">
-                    <h2 data-i18n="recentlyPlayed">Recently Played</h2>
+                    <h2><i class="fas fa-history"></i> <span data-i18n="recentlyPlayed">Recently Played</span></h2>
                     <div class="recent-list" id="recentList"></div>
                 </div>
 
@@ -172,7 +133,7 @@
                     <h2 data-i18n="settings">Settings</h2>
 
                     <div class="settings-section">
-                        <h3 data-i18n="language">Language</h3>
+                        <h3><i class="fas fa-language"></i> <span data-i18n="language">Language</span></h3>
                         <div class="language-options">
                             <button class="lang-option" onclick="setLanguage('uz')">
                                 <span class="lang-name">O'zbek</span>
@@ -190,7 +151,7 @@
                     </div>
 
                     <div class="settings-section">
-                        <h3 data-i18n="audioQuality">Audio Quality</h3>
+                        <h3><i class="fas fa-headphones"></i> <span data-i18n="audioQuality">Audio Quality</span></h3>
                         <div class="quality-options">
                             <button class="quality-option" onclick="setQuality('low')">
                                 <span data-i18n="low">Low</span>
@@ -208,7 +169,7 @@
                     </div>
 
                     <div class="settings-section">
-                        <h3 data-i18n="theme">Theme</h3>
+                        <h3><i class="fas fa-palette"></i> <span data-i18n="theme">Theme</span></h3>
                         <div class="theme-options">
                             <button class="theme-option" onclick="setTheme('light')">
                                 <i class="fas fa-sun"></i>
@@ -226,7 +187,7 @@
                     </div>
 
                     <div class="settings-section">
-                        <h3 data-i18n="autoPlay">Auto Play</h3>
+                        <h3><i class="fas fa-play-circle"></i> <span data-i18n="autoPlay">Auto Play</span></h3>
                         <label class="switch">
                             <input type="checkbox" id="autoPlayToggle" onchange="toggleAutoPlay()">
                             <span class="slider"></span>
@@ -234,7 +195,7 @@
                     </div>
 
                     <div class="settings-section">
-                        <h3 data-i18n="exportData">Export Data</h3>
+                        <h3><i class="fas fa-download"></i> <span data-i18n="exportData">Export Data</span></h3>
                         <button class="export-btn" onclick="exportUserData()">
                             <i class="fas fa-download"></i>
                             <span data-i18n="downloadData">Download My Data</span>
@@ -244,18 +205,42 @@
             </div>
         </div>
 
+        <!-- Bottom Navigation (Mobile) -->
+        <div class="bottom-nav">
+            <div class="nav-item-mobile active" data-page="home">
+                <i class="fas fa-home"></i>
+                <span data-i18n="home">Home</span>
+            </div>
+            <div class="nav-item-mobile" data-page="search">
+                <i class="fas fa-search"></i>
+                <span data-i18n="search">Search</span>
+            </div>
+            <div class="nav-item-mobile" data-page="favorites">
+                <i class="fas fa-heart"></i>
+                <span data-i18n="favorites">Fav</span>
+            </div>
+            <div class="nav-item-mobile" data-page="playlists">
+                <i class="fas fa-list"></i>
+                <span data-i18n="playlists">Lists</span>
+            </div>
+            <div class="nav-item-mobile" data-page="settings">
+                <i class="fas fa-cog"></i>
+                <span data-i18n="settings">Settings</span>
+            </div>
+        </div>
+
         <!-- Music Player -->
-        <div class="music-player" id="musicPlayer">
+        <div class="music-player minimized" id="musicPlayer">
             <div class="player-minimized" onclick="togglePlayer()">
                 <div class="track-info-mini">
                     <div class="track-name-mini" id="miniTrackName">Not playing</div>
                     <div class="track-artist-mini" id="miniTrackArtist">-</div>
                 </div>
                 <div class="player-controls-mini">
-                    <button class="control-btn" onclick="togglePlay(event)">
+                    <button class="control-btn" onclick="event.stopPropagation(); togglePlay()">
                         <i class="fas fa-play" id="miniPlayIcon"></i>
                     </button>
-                    <button class="control-btn" onclick="nextTrack(event)">
+                    <button class="control-btn" onclick="event.stopPropagation(); nextTrack()">
                         <i class="fas fa-forward"></i>
                     </button>
                 </div>
@@ -304,10 +289,10 @@
                 </div>
 
                 <div class="player-actions">
-                    <button class="action-btn" onclick="toggleFavorite()" id="favoriteBtn">
+                    <button class="action-btn" onclick="toggleFavorite(event, currentTrack)" id="favoriteBtn">
                         <i class="far fa-heart"></i>
                     </button>
-                    <button class="action-btn" onclick="addToPlaylist()">
+                    <button class="action-btn" onclick="addToPlaylistModal(event, currentTrack)">
                         <i class="fas fa-plus"></i>
                     </button>
                     <button class="action-btn" onclick="shareTrack()">

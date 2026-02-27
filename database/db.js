@@ -1,99 +1,121 @@
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-import User from '../models/User.js';
+import User from './models/User.js';
 
-dotenv.config();
-
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/music-bot';
-
+// ─── Connection ───────────────────────────────────────────────
 export async function connectDB() {
-    try {
-        await mongoose.connect(MONGODB_URI);
-        console.log('✅ MongoDB connected');
-    } catch (error) {
-        console.error('❌ MongoDB connection error:', error);
-        process.exit(1);
-    }
+    const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/music-bot';
+
+    mongoose.connection.on('connected',    () => console.log('✅ MongoDB connected'));
+    mongoose.connection.on('disconnected', () => console.log('⚠️  MongoDB disconnected'));
+    mongoose.connection.on('error',        (e) => console.error('❌ MongoDB error:', e));
+
+    await mongoose.connect(uri, {
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+    });
 }
 
+// ─── Helpers ──────────────────────────────────────────────────
+function buildTrackId(performer, title) {
+    return `${performer}-${title}`.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+}
+
+function normalizeTrack(track) {
+    return {
+        trackId:   buildTrackId(track.performer, track.title),
+        performer: track.performer,
+        title:     track.title,
+        name:      track.name,
+        audio_url: track.audio_url,
+    };
+}
+
+// ─── User CRUD ────────────────────────────────────────────────
 export async function getUser(telegramId) {
-    return await User.findOne({ telegramId });
+    return User.findOne({ telegramId }).lean();
 }
 
-export async function createOrUpdateUser(telegramId, userData) {
-    return await User.findOneAndUpdate(
+export async function createOrUpdateUser(telegramId, data) {
+    return User.findOneAndUpdate(
         { telegramId },
-        { ...userData, lastActive: Date.now() },
-        { upsert: true, new: true }
-    );
+        { ...data, lastActive: new Date() },
+        { upsert: true, new: true },
+    ).lean();
 }
 
+// ─── Favorites ────────────────────────────────────────────────
 export async function addToFavorites(telegramId, track) {
-    return await User.findOneAndUpdate(
-        { telegramId },
-        {
-            $addToSet: {
-                favorites: {
-                    ...track,
-                    trackId: `${track.performer}-${track.title}`.replace(/[^a-zA-Z0-9]/g, ''),
-                    addedAt: new Date()
-                }
-            }
-        },
-        { new: true }
-    );
+    const normalized = normalizeTrack(track);
+    return User.findOneAndUpdate(
+        { telegramId, 'favorites.trackId': { $ne: normalized.trackId } },
+        { $push: { favorites: { ...normalized, addedAt: new Date() } } },
+        { new: true },
+    ).lean();
 }
 
 export async function removeFromFavorites(telegramId, trackId) {
-    return await User.findOneAndUpdate(
+    return User.findOneAndUpdate(
         { telegramId },
         { $pull: { favorites: { trackId } } },
-        { new: true }
-    );
+        { new: true },
+    ).lean();
 }
 
+// ─── Recently Played ──────────────────────────────────────────
 export async function addToRecentlyPlayed(telegramId, track) {
-    return await User.findOneAndUpdate(
+    const normalized = normalizeTrack(track);
+    await User.updateOne(
+        { telegramId },
+        { $pull: { recentlyPlayed: { trackId: normalized.trackId } } },
+    );
+    return User.findOneAndUpdate(
         { telegramId },
         {
             $push: {
                 recentlyPlayed: {
-                    $each: [{
-                        ...track,
-                        trackId: `${track.performer}-${track.title}`.replace(/[^a-zA-Z0-9]/g, ''),
-                        playedAt: new Date()
-                    }],
-                    $slice: -50
-                }
-            }
+                    $each:     [{ ...normalized, addedAt: new Date() }],
+                    $position: 0,
+                    $slice:    50,
+                },
+            },
         },
-        { new: true }
-    );
+        { new: true, upsert: true },
+    ).lean();
 }
 
+// ─── Playlists ────────────────────────────────────────────────
 export async function createPlaylist(telegramId, name, description = '') {
-    return await User.findOneAndUpdate(
+    const exists = await User.findOne({ telegramId, 'playlists.name': name });
+    if (exists) throw new Error('PLAYLIST_EXISTS');
+
+    return User.findOneAndUpdate(
         { telegramId },
-        { $push: { playlists: { name, description, tracks: [] } } },
-        { new: true }
-    );
+        { $push: { playlists: { name, description, tracks: [], createdAt: new Date() } } },
+        { new: true, upsert: true },
+    ).lean();
 }
 
 export async function addToPlaylist(telegramId, playlistName, track) {
-    return await User.findOneAndUpdate(
+    const normalized = normalizeTrack(track);
+    return User.findOneAndUpdate(
         {
             telegramId,
-            'playlists.name': playlistName
+            'playlists.name': playlistName,
+            'playlists.tracks.trackId': { $ne: normalized.trackId },
         },
         {
             $push: {
-                'playlists.$.tracks': {
-                    ...track,
-                    trackId: `${track.performer}-${track.title}`.replace(/[^a-zA-Z0-9]/g, ''),
-                    addedAt: new Date()
-                }
-            }
+                'playlists.$.tracks': { ...normalized, addedAt: new Date() },
+            },
         },
-        { new: true }
-    );
+        { new: true },
+    ).lean();
+}
+
+export async function deletePlaylist(telegramId, playlistName) {
+    return User.findOneAndUpdate(
+        { telegramId },
+        { $pull: { playlists: { name: playlistName } } },
+        { new: true },
+    ).lean();
 }
