@@ -20,6 +20,120 @@ const TRACKS_PER_PAGE = 10;
 const MAX_PARALLEL_DOWNLOADS = Number(process.env.MAX_PARALLEL_DOWNLOADS || 4);
 const DEBUG_HTML = process.env.DEBUG_HTML === "1";
 const WEB_APP_URL = process.env.WEB_APP_URL || 'https://your-domain.com';
+const PORT = process.env.PORT || 3000;
+
+// ===== Headerlar =====
+const DEFAULT_HEADERS = {
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    accept: "*/*",
+    "accept-language": "en-US,en;q=0.9",
+    "upgrade-insecure-requests": "1",
+};
+
+let FILE_HEADERS = {};
+try {
+    FILE_HEADERS = JSON.parse(await fs.readFile("./header.json", "utf8"));
+} catch { }
+
+const HEADERS = { ...DEFAULT_HEADERS, ...FILE_HEADERS };
+const AUDIO_HEADERS = {
+    ...HEADERS,
+    referer: HEADERS.referer || `https://${BASE_URL}/`,
+    origin: HEADERS.origin || `https://${BASE_URL}`,
+};
+
+// ===== Yordamchi funksiyalar (ROUTEDAN OLDIN) =====
+function sleep(ms) {
+    return new Promise((r) => setTimeout(r, ms));
+}
+
+async function retry(fn, { attempts = 3, minDelay = 250, maxDelay = 1500 } = {}) {
+    let lastErr;
+    for (let i = 0; i < attempts; i++) {
+        try {
+            return await fn();
+        } catch (e) {
+            lastErr = e;
+            await sleep(Math.min(maxDelay, minDelay * 2 ** i));
+        }
+    }
+    throw lastErr;
+}
+
+async function fetchText(url, headers = HEADERS) {
+    const ctrl = new AbortController();
+    const tmr = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+    try {
+        const res = await fetch(url, { signal: ctrl.signal, headers, redirect: "follow" });
+        const html = await res.text();
+        console.log("[FETCH]", res.status, res.url);
+
+        if (!res.ok) {
+            if (DEBUG_HTML) await fs.writeFile("./debug.html", html, "utf8").catch(() => { });
+            throw new Error(`HTTP ${res.status} for ${url}`);
+        }
+
+        return html;
+    } finally {
+        clearTimeout(tmr);
+    }
+}
+
+function cleanKeyword(keyword) {
+    return String(keyword || "")
+        .replace(/[^\w\s]/g, "")
+        .trim()
+        .toLowerCase();
+}
+
+function buildSearchQuery(keyword) {
+    const cleaned = cleanKeyword(keyword);
+    const query = cleaned.replace(/\s+/g, "-");
+    return new URL(`https://${query}.${BASE_URL}`).href;
+}
+
+function parseTracksFromHtml(html) {
+    const $ = cheerio.load(html);
+    const playlist = $("ul.playlist");
+    if (!playlist.length) throw new Error("Could not find playlist element");
+
+    const tracks = [];
+    playlist.find("li").each((i, el) => {
+        const li = $(el);
+        const performer = li.find(".playlist-name-artist").first().text().trim();
+        const title = li.find(".playlist-name-title").first().text().trim();
+        const audio_url = li.find(".playlist-play").first().attr("data-url") || "";
+
+        if (!performer || !title || !audio_url) return;
+
+        tracks.push({
+            index: i,
+            performer,
+            title,
+            name: `${performer} - ${title}`,
+            audio_url: String(audio_url),
+        });
+    });
+    return tracks;
+}
+
+async function parseTracks(url) {
+    return retry(async () => {
+        const html = await fetchText(url, HEADERS);
+        if (DEBUG_HTML) await fs.writeFile("./last.html", html, "utf8").catch(() => { });
+        return parseTracksFromHtml(html);
+    });
+}
+
+async function getTopHits() {
+    console.log("[TOP] Fetching top hits...");
+    return parseTracks(`https://${BASE_URL}`);
+}
+
+async function search(keyword) {
+    console.log("[SEARCH] Searching for:", keyword);
+    return parseTracks(buildSearchQuery(keyword));
+}
 
 // ===== Express server for Web App =====
 const app = express();
@@ -118,20 +232,29 @@ app.get('/api/playlists/:telegramId', async (req, res) => {
 app.get('/api/search', async (req, res) => {
     try {
         const query = req.query.q;
+        console.log("[API] Search query:", query);
+
         if (!query) return res.json([]);
 
         const tracks = await search(query);
+        console.log("[API] Found tracks:", tracks.length);
+
         res.json(tracks);
     } catch (error) {
+        console.error("[API] Search error:", error);
         res.status(500).json({ error: error.message });
     }
 });
 
 app.get('/api/top', async (req, res) => {
     try {
+        console.log("[API] Fetching top hits...");
         const tracks = await getTopHits();
+        console.log("[API] Top hits found:", tracks.length);
+
         res.json(tracks);
     } catch (error) {
+        console.error("[API] Top hits error:", error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -145,29 +268,15 @@ app.get('/api/export/:telegramId', async (req, res) => {
     }
 });
 
-app.listen(3000, () => {
-    console.log('🌐 Web App server running on port 3000');
+// Test endpoint
+app.get('/api/test', (req, res) => {
+    res.json({ status: 'ok', message: 'API is working' });
 });
 
-// ===== Headerlar =====
-const DEFAULT_HEADERS = {
-    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    accept: "*/*",
-    "accept-language": "en-US,en;q=0.9",
-    "upgrade-insecure-requests": "1",
-};
-
-let FILE_HEADERS = {};
-try {
-    FILE_HEADERS = JSON.parse(await fs.readFile("./header.json", "utf8"));
-} catch { }
-
-const HEADERS = { ...DEFAULT_HEADERS, ...FILE_HEADERS };
-const AUDIO_HEADERS = {
-    ...HEADERS,
-    referer: HEADERS.referer || `https://${BASE_URL}/`,
-    origin: HEADERS.origin || `https://${BASE_URL}`,
-};
+app.listen(PORT, () => {
+    console.log(`🌐 Web App server running on port ${PORT}`);
+    console.log(`📡 API URL: http://localhost:${PORT}/api/test`);
+});
 
 // ===== Ko'p tillik =====
 const LANGS = ["uz", "ru", "en"];
@@ -178,69 +287,69 @@ const I18N = {
         START: "🎵 <b>Musiqa Bot</b>\n\nQidirish uchun matn yuboring",
         HELP: "🔍 <b>Yordam</b>\n\n• Matn yozing - qidirish\n• /top - top hitlar\n• /lang - til\n• /app - Web App",
         ABOUT: "ℹ️ <b>Bot haqida</b>\n\nVersiya 3.0",
-        LOADING_TOP: "⏳",
-        SEARCHING: "🔍",
+        LOADING_TOP: "⏳ Yuklanmoqda...",
+        SEARCHING: "🔍 Qidirilmoqda...",
         TOP_TITLE: "⭐ TOP HITLAR",
-        FAILED_TOP: "❌ Xatolik",
-        FAILED_SEARCH: "❌ Xatolik",
-        NOT_FOUND: "❌ Topilmadi",
-        SENDING: (n) => `📤 ${n}`,
-        SENDING_ALL: (k) => `📤 ${k} ta`,
-        SEND_ERR: "❌ Xatolik",
-        INVALID: "❌ Xato",
+        FAILED_TOP: "❌ Xatolik yuz berdi",
+        FAILED_SEARCH: "❌ Qidiruvda xatolik",
+        NOT_FOUND: "❌ Hech narsa topilmadi",
+        SENDING: (n) => `📤 Yuklanmoqda: ${n}`,
+        SENDING_ALL: (k) => `📤 ${k} ta yuklanmoqda`,
+        SEND_ERR: "❌ Yuklab bo'lmadi",
+        INVALID: "❌ Noto'g'ri so'rov",
         LANG_PICK: "🌐 Til tanlang:",
-        LANG_SET: (l) => `✅ ${l}`,
-        BTN_ALL: "⬇️ All",
+        LANG_SET: (l) => `✅ Til o'zgartirildi: ${l}`,
+        BTN_ALL: "⬇️ Hammasi",
         TRACK_COUNT: (total, page, totalPages) => `${total} ta | ${page}/${totalPages}`,
         PROCESSING: "⚙️",
         SUCCESS: "✅ OK",
-        OPEN_WEB_APP: "🌐 Ochish",
+        OPEN_WEB_APP: "🌐 Web App",
         WEB_APP_DESC: "To'liq musiqa pleer",
     },
     ru: {
         START: "🎵 <b>Music Bot</b>\n\nОтправьте текст для поиска",
         HELP: "🔍 <b>Помощь</b>\n\n• Текст - поиск\n• /top - топ\n• /lang - язык\n• /app - Web App",
         ABOUT: "ℹ️ <b>О боте</b>\n\nВерсия 3.0",
-        LOADING_TOP: "⏳",
-        SEARCHING: "🔍",
+        LOADING_TOP: "⏳ Загрузка...",
+        SEARCHING: "🔍 Поиск...",
         TOP_TITLE: "⭐ ТОП",
         FAILED_TOP: "❌ Ошибка",
-        FAILED_SEARCH: "❌ Ошибка",
+        FAILED_SEARCH: "❌ Ошибка поиска",
         NOT_FOUND: "❌ Не найдено",
-        SENDING: (n) => `📤 ${n}`,
-        SENDING_ALL: (k) => `📤 ${k}`,
+        SENDING: (n) => `📤 Отправка: ${n}`,
+        SENDING_ALL: (k) => `📤 ${k} отправляется`,
         SEND_ERR: "❌ Ошибка",
         INVALID: "❌ Ошибка",
         LANG_PICK: "🌐 Выберите язык:",
-        LANG_SET: (l) => `✅ ${l}`,
+        LANG_SET: (l) => `✅ Язык: ${l}`,
         BTN_ALL: "⬇️ Все",
         TRACK_COUNT: (total, page, totalPages) => `${total} | ${page}/${totalPages}`,
         PROCESSING: "⚙️",
         SUCCESS: "✅ OK",
-        OPEN_WEB_APP: "🌐 Открыть",
+        OPEN_WEB_APP: "🌐 Web App",
         WEB_APP_DESC: "Музыкальный плеер",
     },
     en: {
         START: "🎵 <b>Music Bot</b>\n\nSend text to search",
         HELP: "🔍 <b>Help</b>\n\n• Text - search\n• /top - top\n• /lang - language\n• /app - Web App",
         ABOUT: "ℹ️ <b>About</b>\n\nVersion 3.0",
-        LOADING_TOP: "⏳",
-        SEARCHING: "🔍",
+        LOADING_TOP: "⏳ Loading...",
+        SEARCHING: "🔍 Searching...",
         TOP_TITLE: "⭐ TOP",
         FAILED_TOP: "❌ Error",
-        FAILED_SEARCH: "❌ Error",
+        FAILED_SEARCH: "❌ Search error",
         NOT_FOUND: "❌ Not found",
-        SENDING: (n) => `📤 ${n}`,
-        SENDING_ALL: (k) => `📤 ${k}`,
+        SENDING: (n) => `📤 Sending: ${n}`,
+        SENDING_ALL: (k) => `📤 Sending ${k}`,
         SEND_ERR: "❌ Error",
         INVALID: "❌ Error",
         LANG_PICK: "🌐 Choose language:",
-        LANG_SET: (l) => `✅ ${l}`,
+        LANG_SET: (l) => `✅ Language: ${l}`,
         BTN_ALL: "⬇️ All",
         TRACK_COUNT: (total, page, totalPages) => `${total} | ${page}/${totalPages}`,
         PROCESSING: "⚙️",
         SUCCESS: "✅ OK",
-        OPEN_WEB_APP: "🌐 Open",
+        OPEN_WEB_APP: "🌐 Web App",
         WEB_APP_DESC: "Music player",
     },
 };
@@ -303,97 +412,6 @@ function releaseSlot() {
     activeDownloads = Math.max(0, activeDownloads - 1);
     const next = waiters.shift();
     if (next) next();
-}
-
-// ===== Yordamchi funksiyalar =====
-function sleep(ms) {
-    return new Promise((r) => setTimeout(r, ms));
-}
-
-async function retry(fn, { attempts = 3, minDelay = 250, maxDelay = 1500 } = {}) {
-    let lastErr;
-    for (let i = 0; i < attempts; i++) {
-        try {
-            return await fn();
-        } catch (e) {
-            lastErr = e;
-            await sleep(Math.min(maxDelay, minDelay * 2 ** i));
-        }
-    }
-    throw lastErr;
-}
-
-async function fetchText(url, headers = HEADERS) {
-    const ctrl = new AbortController();
-    const tmr = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-    try {
-        const res = await fetch(url, { signal: ctrl.signal, headers, redirect: "follow" });
-        const html = await res.text();
-        console.log("[FETCH]", res.status, res.url);
-
-        if (!res.ok) {
-            if (DEBUG_HTML) await fs.writeFile("./debug.html", html, "utf8").catch(() => { });
-            throw new Error(`HTTP ${res.status} for ${url}`);
-        }
-
-        return html;
-    } finally {
-        clearTimeout(tmr);
-    }
-}
-
-function cleanKeyword(keyword) {
-    return String(keyword || "")
-        .replace(/[^\w\s]/g, "")
-        .trim()
-        .toLowerCase();
-}
-
-function buildSearchQuery(keyword) {
-    const cleaned = cleanKeyword(keyword);
-    const query = cleaned.replace(/\s+/g, "-");
-    return new URL(`https://${query}.${BASE_URL}`).href;
-}
-
-function parseTracksFromHtml(html) {
-    const $ = cheerio.load(html);
-    const playlist = $("ul.playlist");
-    if (!playlist.length) throw new Error("Could not find playlist element");
-
-    const tracks = [];
-    playlist.find("li").each((i, el) => {
-        const li = $(el);
-        const performer = li.find(".playlist-name-artist").first().text().trim();
-        const title = li.find(".playlist-name-title").first().text().trim();
-        const audio_url = li.find(".playlist-play").first().attr("data-url") || "";
-
-        if (!performer || !title || !audio_url) return;
-
-        tracks.push({
-            index: i,
-            performer,
-            title,
-            name: `${performer} - ${title}`,
-            audio_url: String(audio_url),
-        });
-    });
-    return tracks;
-}
-
-async function parseTracks(url) {
-    return retry(async () => {
-        const html = await fetchText(url, HEADERS);
-        if (DEBUG_HTML) await fs.writeFile("./last.html", html, "utf8").catch(() => { });
-        return parseTracksFromHtml(html);
-    });
-}
-
-async function getTopHits() {
-    return parseTracks(`https://${BASE_URL}`);
-}
-
-async function search(keyword) {
-    return parseTracks(buildSearchQuery(keyword));
 }
 
 // ===== Klaviatura =====
@@ -764,6 +782,7 @@ setInterval(() => {
 // Botni ishga tushirish
 bot.launch().then(() => {
     console.log("🚀 Bot ishga tushdi!");
+    console.log(`📡 Bot username: @${bot.botInfo.username}`);
 });
 
 process.once("SIGINT", () => bot.stop("SIGINT"));
