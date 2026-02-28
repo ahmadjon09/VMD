@@ -17,7 +17,7 @@ const PlaylistSchema = new mongoose.Schema({
 }, { _id: false });
 
 const UserSchema = new mongoose.Schema({
-    telegramId: { type: Number, required: true,},
+    telegramId: { type: String, required: true, },
     firstName: { type: String, default: '' },
     lastName: { type: String, default: '' },
     username: { type: String, default: '' },
