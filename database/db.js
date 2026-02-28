@@ -5,9 +5,9 @@ import User from './models/User.js';
 export async function connectDB() {
     const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/music-bot';
 
-    mongoose.connection.on('connected',    () => console.log('✅ MongoDB connected'));
+    mongoose.connection.on('connected', () => console.log('✅ MongoDB connected'));
     mongoose.connection.on('disconnected', () => console.log('⚠️  MongoDB disconnected'));
-    mongoose.connection.on('error',        (e) => console.error('❌ MongoDB error:', e));
+    mongoose.connection.on('error', (e) => console.error('❌ MongoDB error:', e));
 
     await mongoose.connect(uri, {
         serverSelectionTimeoutMS: 5000,
@@ -22,10 +22,10 @@ function buildTrackId(performer, title) {
 
 function normalizeTrack(track) {
     return {
-        trackId:   buildTrackId(track.performer, track.title),
+        trackId: buildTrackId(track.performer, track.title),
         performer: track.performer,
-        title:     track.title,
-        name:      track.name,
+        title: track.title,
+        name: track.name,
         audio_url: track.audio_url,
     };
 }
@@ -39,7 +39,7 @@ export async function createOrUpdateUser(telegramId, data) {
     return User.findOneAndUpdate(
         { telegramId },
         { ...data, lastActive: new Date() },
-        { upsert: true, new: true },
+        { upsert: true, returnDocument: 'after', upsert: true },
     ).lean();
 }
 
@@ -49,7 +49,7 @@ export async function addToFavorites(telegramId, track) {
     return User.findOneAndUpdate(
         { telegramId, 'favorites.trackId': { $ne: normalized.trackId } },
         { $push: { favorites: { ...normalized, addedAt: new Date() } } },
-        { new: true },
+        { returnDocument: 'after', upsert: true },
     ).lean();
 }
 
@@ -57,7 +57,7 @@ export async function removeFromFavorites(telegramId, trackId) {
     return User.findOneAndUpdate(
         { telegramId },
         { $pull: { favorites: { trackId } } },
-        { new: true },
+        { returnDocument: 'after', upsert: true },
     ).lean();
 }
 
@@ -73,9 +73,9 @@ export async function addToRecentlyPlayed(telegramId, track) {
         {
             $push: {
                 recentlyPlayed: {
-                    $each:     [{ ...normalized, addedAt: new Date() }],
+                    $each: [{ ...normalized, addedAt: new Date() }],
                     $position: 0,
-                    $slice:    50,
+                    $slice: 50,
                 },
             },
         },
@@ -108,7 +108,7 @@ export async function addToPlaylist(telegramId, playlistName, track) {
                 'playlists.$.tracks': { ...normalized, addedAt: new Date() },
             },
         },
-        { new: true },
+        { returnDocument: 'after', upsert: true },
     ).lean();
 }
 
@@ -116,6 +116,6 @@ export async function deletePlaylist(telegramId, playlistName) {
     return User.findOneAndUpdate(
         { telegramId },
         { $pull: { playlists: { name: playlistName } } },
-        { new: true },
+        { returnDocument: 'after', upsert: true },
     ).lean();
 }

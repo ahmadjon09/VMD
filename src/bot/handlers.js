@@ -43,7 +43,7 @@ async function sendTrack(ctx, track) {
                 {
                     title: track.title,
                     performer: track.performer,
-                    caption: `🎵 <b>${track.name}</b>\n\n🔍 @${ctx.botInfo.username}`,
+                    caption: `🎵 <b>${track.name}</b>\n\n @${ctx.botInfo.username}`,
                     parse_mode: 'HTML',
                 },
             );
