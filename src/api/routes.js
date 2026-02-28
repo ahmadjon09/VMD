@@ -11,6 +11,7 @@ import {
     addToPlaylist,
     deletePlaylist,
 } from '../../database/db.js';
+import helmet from "helmet";
 import { getTopHits, searchTracks } from '../services/scraper.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -18,15 +19,47 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const router = express.Router();
 
 // ─── Middleware ───────────────────────────────────────────────
+
 export function createApp() {
     const app = express();
+
     app.use(cors());
-    app.use(express.json({ limit: '1mb' }));
-    app.use(express.static(path.join(__dirname, '../../web-app')));
-    app.use('/api', router);
+
+    app.use(express.json({ limit: "1mb" }));
+
+    // Telegram Mini App uchun CSP
+    app.use(
+        helmet({
+            contentSecurityPolicy: {
+                useDefaults: true,
+                directives: {
+                    defaultSrc: ["'self'"],
+                    scriptSrc: [
+                        "'self'",
+                        "https://telegram.org",
+                        "https://web.telegram.org",
+                        "'unsafe-inline'",
+                    ],
+                    styleSrc: ["'self'", "'unsafe-inline'"],
+                    imgSrc: ["'self'", "data:", "blob:", "https:"],
+                    fontSrc: ["'self'", "data:", "https:"],
+                    connectSrc: ["'self'", "https:"], // API boshqa domen bo'lsa shu yerga qo'shasan
+                    frameSrc: ["'self'", "https://web.telegram.org"],
+                    frameAncestors: ["'self'", "https://web.telegram.org"],
+                    objectSrc: ["'none'"],
+                    baseUri: ["'self'"],
+                    upgradeInsecureRequests: [],
+                },
+            },
+            crossOriginResourcePolicy: { policy: "cross-origin" },
+        })
+    );
+
+    app.use(express.static(path.join(__dirname, "../../web-app")));
+    app.use("/api", router);
+
     return app;
 }
-
 // ─── Tiny async wrapper ───────────────────────────────────────
 function wrap(fn) {
     return (req, res, next) =>

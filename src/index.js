@@ -3,7 +3,7 @@ import { Telegraf } from 'telegraf';
 import { connectDB } from '../database/db.js';
 import { createApp, errorHandler } from './api/routes.js';
 import { registerCommands } from './bot/handlers.js';
-
+import axios from 'axios';
 // ─── Validate required env vars ───────────────────────────────
 const { BOT_TOKEN } = process.env;
 if (!BOT_TOKEN) throw new Error('BOT_TOKEN env variable is required');
